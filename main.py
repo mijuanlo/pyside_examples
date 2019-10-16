@@ -55,8 +55,48 @@ class MainWindow2(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-from PySide2.QtCore import Qt
+from PySide2.QtGui import QPdfWriter,QPainter,QPagedPaintDevice,QFont
+from PySide2.QtGui import QTextDocument 
+from PySide2.QtPrintSupport import QPrinter
+from PySide2.QtWidgets import QTextEdit
+from PySide2.QtCore import QSizeF,QRectF,Qt
+textMargins = 12
+borderMargins = 10
+doPageFooter = False
+def mmToPixels(printer, mm):
+    return mm * 0.039370147 * printer.resolution()
+
+def paintPage(currentPage, totalpages, painter, doc, textrect, footerheight):
+    painter.save()
+    pagesize = QRectF(0,currentPage * doc.pageSize().height(),doc.pageSize().width(), doc.pageSize().height())
+    painter.setClipRect(textrect)
+    painter.translate(0,-pagesize.top())
+    painter.translate(textrect.left(),textrect.top())
+    doc.drawContents(painter)
+    painter.restore()
+    footerrect = QRectF(textrect)
+    footerrect.setTop(textrect.bottom())
+    footerrect.setHeight(footerheight)
+    if doPageFooter:
+        painter.drawText(footerrect,Qt.AlignVCenter|Qt.AlignRight,"Page {} of {}".format(currentPage+1,totalpages))
+
+def customPrint(printer, doc):
+    painter = QPainter(printer)
+    doc.documentLayout().setPaintDevice(printer)
+    doc.setPageSize(printer.pageRect().size())
+    pageSize = printer.pageRect().size()
+    tm = mmToPixels(printer,textMargins)
+    footHeight = painter.fontMetrics().height()
+    textRect = QRectF(tm,tm,pageSize.width() - 2 * tm, pageSize.height()-2*tm - footHeight)
+    doc.setPageSize(textRect.size())
+    pagecount=doc.pageCount()
+    for index in range(pagecount):
+        if index != 0:
+            printer.newPage()
+        paintPage(index, pagecount, painter, doc, textRect, footHeight)
+
 if __name__ == "__main__":
+    from PySide2.QtCore import Qt
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     app = QApplication([])
     window = MainWindow()
@@ -127,11 +167,20 @@ if __name__ == "__main__":
     document.print_(printer)
 
     from PySide2.QtPrintSupport import QPrintPreviewWidget
-
+    
+    '''
     txtview = QTextEdit()
     txtview.setDocument(document)
     txtview.show()
+    '''
 
+    printer = QPrinter(QPrinter.HighResolution)
+    printer.setPageSize(QPrinter.A4)
+    printer.setOutputFormat(QPrinter.PdfFormat)
+    printer.setOutputFileName("file3.pdf")
+    customPrint(printer,document)
+    
+    
     preview = QPrintPreviewWidget(printer)
     preview.setWindowFlags(Qt.Window)
     #preview.setViewMode(QPrintPreviewWidget.AllPagesView)
@@ -143,7 +192,6 @@ if __name__ == "__main__":
     preview.paintRequested.connect(document.print_)
     preview.show()
     preview.resize(600,800)
-    
 
     sys.exit(app.exec_())
 
